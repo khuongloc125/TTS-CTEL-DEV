@@ -32,3 +32,12 @@ type CountResponse struct {
 	Count   int64             `json:"count"`
 	Filters map[string]string `json:"filters"`
 }
+
+type BatchCreateRequest struct {
+	Assets []Asset `json:"assets"`
+}
+
+type BatchCreateResponse struct {
+	Created int      `json:"created"`
+	IDs     []string `json:"ids"`
+}

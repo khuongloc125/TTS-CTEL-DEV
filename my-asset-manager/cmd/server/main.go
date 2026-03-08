@@ -28,7 +28,6 @@ func main() {
 	serverPort := os.Getenv("SERVER_PORT")
 
 	// 3. Tạo chuỗi DSN cho MySQL
-	// Format: user:pass@tcp(host:port)/dbname?charset=utf8mb4&parseTime=True&loc=Local
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		dbUser, dbPass, dbHost, dbPort, dbName)
 
@@ -44,6 +43,7 @@ func main() {
 	// 6. Định nghĩa Routes
 	http.HandleFunc("/assets/stats", h.GetStats)
 	http.HandleFunc("/assets/count", h.CountAssets)
+	http.HandleFunc("/assets/batch", h.BatchCreate)
 
 	log.Printf("Server đang chạy tại cổng :%s...\n", serverPort)
 	log.Fatal(http.ListenAndServe(":"+serverPort, nil))

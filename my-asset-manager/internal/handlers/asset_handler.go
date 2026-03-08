@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"my-asset-manager/internal/models"
 	"net/http"
 
@@ -12,16 +13,13 @@ type AssetHandler struct {
 	DB *gorm.DB
 }
 
-// 1.1 Thống kê Assets
 func (h *AssetHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	var stats models.StatsResponse
 	stats.ByType = make(map[string]int64)
 	stats.ByStatus = make(map[string]int64)
 
-	// Đếm tổng số lượng
 	h.DB.Model(&models.Asset{}).Count(&stats.Total)
 
-	// Thống kê theo Type
 	var typeResults []struct {
 		Type  string
 		Count int64
@@ -31,7 +29,6 @@ func (h *AssetHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		stats.ByType[res.Type] = res.Count
 	}
 
-	// Thống kê theo Status
 	var statusResults []struct {
 		Status string
 		Count  int64
@@ -45,7 +42,6 @@ func (h *AssetHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
-// 1.2 Đếm Assets có filter
 func (h *AssetHandler) CountAssets(w http.ResponseWriter, r *http.Request) {
 	assetType := r.URL.Query().Get("type")
 	status := r.URL.Query().Get("status")
@@ -70,4 +66,57 @@ func (h *AssetHandler) CountAssets(w http.ResponseWriter, r *http.Request) {
 		Count:   count,
 		Filters: filters,
 	})
+}
+
+func (h *AssetHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
+	var req models.BatchCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Assets) > 100 {
+		http.Error(w, "Limit exceeded: maximum 100 assets per request", http.StatusBadRequest)
+		return
+	}
+
+	createdIDs := []string{}
+
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		for _, asset := range req.Assets {
+			if !isValidType(asset.Type) {
+				return fmt.Errorf("invalid asset type: %s for asset: %s", asset.Type, asset.Name)
+			}
+            
+            if asset.Name == "" {
+                return fmt.Errorf("asset name cannot be empty")
+            }
+
+			if err := tx.Create(&asset).Error; err != nil {
+				return err 
+			}
+			
+			createdIDs = append(createdIDs, asset.ID)
+		}
+		return nil 
+	})
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(models.BatchCreateResponse{
+		Created: len(createdIDs),
+		IDs:     createdIDs,
+	})
+}
+
+func isValidType(t string) bool {
+	switch t {
+	case "domain", "ip", "service":
+		return true
+	}
+	return false
 }

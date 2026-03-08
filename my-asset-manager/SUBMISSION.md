@@ -5,7 +5,7 @@
 ## Các bài đã hoàn thành
 
 - [x] Bài 1: Statistics APIs
-- [ ] Bài 2: Batch Create
+- [x] Bài 2: Batch Create
 - [ ] Bài 3: Batch Delete
 - [ ] Bài 4: Connection Retry
 - [ ] Bài 5: Health Check
