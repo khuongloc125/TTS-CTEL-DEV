@@ -228,3 +228,28 @@ func (h *AssetHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
+
+func (h *AssetHandler) SearchAssets(w http.ResponseWriter, r *http.Request) {
+
+	queryParam := r.URL.Query().Get("q")
+	if queryParam == "" {
+		http.Error(w, "Search query 'q' is required", http.StatusBadRequest)
+		return
+	}
+
+	var assets []models.Asset
+
+	searchTerm := "%" + queryParam + "%"
+	
+	err := h.DB.Limit(100).
+		Where("name LIKE ?", searchTerm).
+		Find(&assets).Error
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(assets)
+}
