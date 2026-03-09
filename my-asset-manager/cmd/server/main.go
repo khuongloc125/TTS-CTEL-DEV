@@ -43,7 +43,16 @@ func main() {
 	// 6. Định nghĩa Routes
 	http.HandleFunc("/assets/stats", h.GetStats)
 	http.HandleFunc("/assets/count", h.CountAssets)
-	http.HandleFunc("/assets/batch", h.BatchCreate)
+	http.HandleFunc("/assets/batch", func(w http.ResponseWriter, r *http.Request) {
+        switch r.Method {
+        case http.MethodPost:
+            h.BatchCreate(w, r)
+        case http.MethodDelete:
+            h.BatchDelete(w, r)
+        default:
+            http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        }
+    })
 
 	log.Printf("Server đang chạy tại cổng :%s...\n", serverPort)
 	log.Fatal(http.ListenAndServe(":"+serverPort, nil))

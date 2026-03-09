@@ -41,3 +41,8 @@ type BatchCreateResponse struct {
 	Created int      `json:"created"`
 	IDs     []string `json:"ids"`
 }
+
+type BatchDeleteResponse struct {
+	Deleted  int64 `json:"deleted"`
+	NotFound int64 `json:"not_found"`
+}

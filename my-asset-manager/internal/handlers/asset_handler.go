@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"my-asset-manager/internal/models"
 	"net/http"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -119,4 +120,31 @@ func isValidType(t string) bool {
 		return true
 	}
 	return false
+}
+
+func (h *AssetHandler) BatchDelete(w http.ResponseWriter, r *http.Request) {
+	idsParam := r.URL.Query().Get("ids")
+	if idsParam == "" {
+		http.Error(w, "ids parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	ids := strings.Split(idsParam, ",")
+	totalRequested := int64(len(ids))
+
+	result := h.DB.Where("id IN ?", ids).Delete(&models.Asset{})
+	
+	if result.Error != nil {
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	deletedCount := result.RowsAffected
+	notFoundCount := totalRequested - deletedCount
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.BatchDeleteResponse{
+		Deleted:  deletedCount,
+		NotFound: notFoundCount,
+	})
 }
