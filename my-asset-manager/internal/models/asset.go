@@ -60,3 +60,15 @@ type DatabaseStatus struct {
 	Idle            int    `json:"idle"`
 	MaxOpen         int    `json:"max_open"`
 }
+
+type Pagination struct {
+	Page       int   `json:"page"`
+	Limit      int   `json:"limit"`
+	Total      int64 `json:"total"`
+	TotalPages int   `json:"total_pages"`
+}
+
+type AssetListResponse struct {
+	Data       []Asset    `json:"data"`
+	Pagination Pagination `json:"pagination"`
+}

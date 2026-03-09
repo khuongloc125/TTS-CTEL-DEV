@@ -3,8 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"my-asset-manager/internal/models"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -177,4 +179,52 @@ func (h *AssetHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(health)
+}
+
+func (h *AssetHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page <= 0 { page = 1 }
+
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 { limit = 20 }
+	if limit > 100 { limit = 100 } 
+
+	assetType := r.URL.Query().Get("type")
+	status := r.URL.Query().Get("status")
+
+	query := h.DB.Model(&models.Asset{})
+
+	if assetType != "" {
+		query = query.Where("type = ?", assetType)
+	}
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	var total int64
+	query.Count(&total)
+
+	var assets []models.Asset
+	offset := (page - 1) * limit
+
+	err := query.Order("created_at DESC").Limit(limit).Offset(offset).Find(&assets).Error
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	totalPages := int(math.Ceil(float64(total) / float64(limit)))
+
+	resp := models.AssetListResponse{
+		Data: assets,
+		Pagination: models.Pagination{
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }

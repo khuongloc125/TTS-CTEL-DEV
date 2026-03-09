@@ -42,6 +42,7 @@ func main() {
 
 	// 6. Định nghĩa Routes
 	http.HandleFunc("/health", h.HealthCheck)
+	http.HandleFunc("/assets", h.ListAssets)
 	http.HandleFunc("/assets/stats", h.GetStats)
 	http.HandleFunc("/assets/count", h.CountAssets)
 	http.HandleFunc("/assets/batch", func(w http.ResponseWriter, r *http.Request) {
