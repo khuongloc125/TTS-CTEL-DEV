@@ -32,10 +32,10 @@ func main() {
 		dbUser, dbPass, dbHost, dbPort, dbName)
 
 	// 4. Kết nối Database
-	db, err := database.NewMySQLDB(dsn)
-	if err != nil {
-		log.Fatal("Lỗi kết nối DB:", err)
-	}
+	db, err := database.ConnectWithRetry(dsn, 5)
+    if err != nil {
+        log.Fatalf("❌ Kết thúc: %v", err)
+    }
 
 	// 5. Khởi tạo Handler
 	h := &handlers.AssetHandler{DB: db}
