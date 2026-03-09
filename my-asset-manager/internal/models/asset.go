@@ -46,3 +46,17 @@ type BatchDeleteResponse struct {
 	Deleted  int64 `json:"deleted"`
 	NotFound int64 `json:"not_found"`
 }
+
+type HealthResponse struct {
+	Status    string         `json:"status"`
+	Database  DatabaseStatus `json:"database"`
+	Timestamp string         `json:"timestamp"`
+}
+
+type DatabaseStatus struct {
+	Status          string `json:"status"`
+	OpenConnections int    `json:"open_connections"`
+	InUse           int    `json:"in_use"`
+	Idle            int    `json:"idle"`
+	MaxOpen         int    `json:"max_open"`
+}

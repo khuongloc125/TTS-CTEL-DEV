@@ -6,6 +6,7 @@ import (
 	"my-asset-manager/internal/models"
 	"net/http"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -147,4 +148,33 @@ func (h *AssetHandler) BatchDelete(w http.ResponseWriter, r *http.Request) {
 		Deleted:  deletedCount,
 		NotFound: notFoundCount,
 	})
+}
+
+func (h *AssetHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	// Lấy đối tượng sql.DB từ GORM
+	sqlDB, err := h.DB.DB()
+	
+	health := models.HealthResponse{
+		Status:    "ok",
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	if err != nil || sqlDB.Ping() != nil {
+		health.Status = "degraded"
+		health.Database.Status = "disconnected"
+		w.WriteHeader(http.StatusServiceUnavailable)
+	} else {
+		stats := sqlDB.Stats()
+		health.Database = models.DatabaseStatus{
+			Status:          "connected",
+			OpenConnections: stats.OpenConnections,
+			InUse:           stats.InUse,
+			Idle:            stats.Idle,
+			MaxOpen:         stats.MaxOpenConnections,
+		}
+		w.WriteHeader(http.StatusOK) 
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(health)
 }

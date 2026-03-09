@@ -41,6 +41,7 @@ func main() {
 	h := &handlers.AssetHandler{DB: db}
 
 	// 6. Định nghĩa Routes
+	http.HandleFunc("/health", h.HealthCheck)
 	http.HandleFunc("/assets/stats", h.GetStats)
 	http.HandleFunc("/assets/count", h.CountAssets)
 	http.HandleFunc("/assets/batch", func(w http.ResponseWriter, r *http.Request) {
