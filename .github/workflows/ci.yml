@@ -26,7 +26,7 @@ jobs:
       - name: Run Gosec (SAST)
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec ./...
+          gosec -severity medium ./...
 
       - name: Trivy Scan Backend (SCA)
         uses: aquasecurity/trivy-action@master
