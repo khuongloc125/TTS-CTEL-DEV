@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 )
 
@@ -18,32 +20,40 @@ type AssetHandler struct {
 }
 
 func (h *AssetHandler) GetStats(w http.ResponseWriter, r *http.Request) {
-	var stats models.StatsResponse
-	stats.ByType = make(map[string]int64)
-	stats.ByStatus = make(map[string]int64)
+    var totalAssets, activeAssets, totalScans, completedScans int64
 
-	h.DB.Model(&models.Asset{}).Count(&stats.Total)
+    h.DB.Model(&models.Asset{}).Count(&totalAssets)
+    h.DB.Model(&models.Asset{}).Where("status = ?", "active").Count(&activeAssets)
 
-	var typeResults []struct {
-		Type  string
-		Count int64
-	}
-	h.DB.Model(&models.Asset{}).Select("type, count(*) as count").Group("type").Scan(&typeResults)
-	for _, res := range typeResults {
-		stats.ByType[res.Type] = res.Count
-	}
+    h.DB.Model(&models.ScanJob{}).Count(&totalScans)
+    h.DB.Model(&models.ScanJob{}).Where("status = ?", "completed").Count(&completedScans)
 
-	var statusResults []struct {
-		Status string
-		Count  int64
-	}
-	h.DB.Model(&models.Asset{}).Select("status, count(*) as count").Group("status").Scan(&statusResults)
-	for _, res := range statusResults {
-		stats.ByStatus[res.Status] = res.Count
-	}
+    response := map[string]interface{}{
+        "totalAssets":    totalAssets,
+        "activeAssets":   activeAssets,
+        "totalScans":     totalScans,
+        "completedScans": completedScans,
+        "byType":   h.getCountsByGroup("type"),
+        "byStatus": h.getCountsByGroup("status"),
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(response)
+}
+
+func (h *AssetHandler) getCountsByGroup(column string) map[string]int64 {
+    results := make(map[string]int64)
+    var queryResults []struct {
+        Key   string `gorm:"column:key"`
+        Count int64
+    }
+    
+    h.DB.Model(&models.Asset{}).Select(column + " as `key`, count(*) as count").Group(column).Scan(&queryResults)
+    
+    for _, res := range queryResults {
+        results[res.Key] = res.Count
+    }
+    return results
 }
 
 func (h *AssetHandler) CountAssets(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +163,7 @@ func (h *AssetHandler) BatchDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AssetHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
-	// Lấy đối tượng sql.DB từ GORM
+	
 	sqlDB, err := h.DB.DB()
 	
 	health := models.HealthResponse{
@@ -253,3 +263,96 @@ func (h *AssetHandler) SearchAssets(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(assets)
 }
+
+func (h *AssetHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
+    var asset models.Asset
+    
+    if err := json.NewDecoder(r.Body).Decode(&asset); err != nil {
+        http.Error(w, "Dữ liệu không hợp lệ", http.StatusBadRequest)
+        return
+    }
+
+    asset.ID = uuid.New().String()
+    asset.CreatedAt = time.Now()
+    
+    if asset.Status == "" {
+        asset.Status = "active"
+    }
+
+    if err := h.DB.Create(&asset).Error; err != nil {
+        http.Error(w, "Lỗi lưu Database: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(asset)
+}
+
+func (h *AssetHandler) GetAsset(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	var asset models.Asset
+	if err := h.DB.First(&asset, "id = ?", vars["id"]).Error; err != nil {
+		http.Error(w, "Asset not found", http.StatusNotFound)
+		return
+	}
+	json.NewEncoder(w).Encode(asset)
+}
+
+func (h *AssetHandler) UpdateAsset(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	var asset models.Asset
+	if err := h.DB.First(&asset, "id = ?", vars["id"]).Error; err != nil {
+		http.Error(w, "Asset not found", http.StatusNotFound)
+		return
+	}
+	json.NewDecoder(r.Body).Decode(&asset)
+	h.DB.Save(&asset)
+	json.NewEncoder(w).Encode(asset)
+}
+
+func (h *AssetHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	h.DB.Delete(&models.Asset{}, "id = ?", vars["id"])
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *AssetHandler) GetLatestDNS(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    assetID := vars["id"]
+
+    var results []models.ScanResult
+    err := h.DB.Table("scan_results"). // Thêm .Table để chỉ định rõ
+        Joins("JOIN scan_jobs ON scan_jobs.id = scan_results.job_id").
+        Where("scan_jobs.asset_id = ? AND scan_results.scan_type = ?", assetID, "dns").
+        Order("scan_results.created_at DESC").
+        Limit(1).
+        Find(&results).Error
+
+    w.Header().Set("Content-Type", "application/json")
+    if err != nil || len(results) == 0 {
+        w.Write([]byte(`{}`)) // Trả về rỗng thay vì 404
+        return
+    }
+    json.NewEncoder(w).Encode(results[0])
+}
+
+func (h *AssetHandler) GetSubdomains(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	assetID := vars["id"]
+
+	var result models.ScanResult
+	err := h.DB.Joins("JOIN scan_jobs ON scan_jobs.id = scan_results.job_id").
+		Where("scan_jobs.asset_id = ? AND scan_results.scan_type = ?", assetID, "dns").
+		Order("scan_results.created_at DESC").
+		First(&result).Error
+
+	if err != nil {
+		http.Error(w, "Subdomain results not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+

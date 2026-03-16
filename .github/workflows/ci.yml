@@ -1,0 +1,63 @@
+name: Security CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "kloc" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Quan trọng cho Gitleaks/TruffleHog để scan lịch sử commit
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21' # Thay đổi version phù hợp với project của bạn
+
+      # 1. Gosec - Scan lỗi bảo mật trong code Go (SQLi, Unsafe operations...)
+      - name: Run Gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec ./...
+        # Sử dụng Rule ID trong dải 1005xx nếu bạn cần tùy chỉnh config sau này
+
+      # 2. Gitleaks - Phát hiện secrets, API keys
+      - name: Gitleaks Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 3. TruffleHog - Scan sâu lịch sử commit tìm secrets
+      - name: TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      # 4. Trivy - Quét lỗ hổng trong dependencies (SCA)
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1' # Build sẽ fail nếu tìm thấy lỗi nghiêm trọng
+          severity: 'CRITICAL,HIGH'
+
+  build:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Application
+        run: go build -v ./...
