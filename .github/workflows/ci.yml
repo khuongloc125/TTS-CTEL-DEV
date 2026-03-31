@@ -1,0 +1,88 @@
+name: Security CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "kloc" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  backend-security:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: my-asset-manager
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run Gosec 
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -no-fail ./...
+
+      - name: Trivy Scan Backend (SCA)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'my-asset-manager'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+
+
+  frontend-security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Trivy Scan Frontend (SCA)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'frontend' 
+          format: 'table'
+          exit-code: '1' 
+          severity: 'CRITICAL,HIGH'
+
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+  build:
+    needs: [backend-security, frontend-security, secret-scan]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: my-asset-manager
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Build Backend
+        run: |
+          go mod download
+          go build -v ./...

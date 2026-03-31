@@ -7,11 +7,37 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	TypeDomain  = "domain"
+	TypeIP      = "ip"
+	TypeService = "service"
+
+	StatusActive   = "active"
+	StatusInactive = "inactive"
+)
+
+func IsValidType(t string) bool {
+	return t == TypeDomain || t == TypeIP || t == TypeService
+}
+
+func IsValidStatus(s string) bool {
+	return s == StatusActive || s == StatusInactive
+}
+
+func IsValidScanType(st ScanType) bool {
+    switch st {
+    case ScanTypeDNS, ScanTypeWHOIS, ScanTypeSSL, ScanTypePort, ScanTypeTech:
+        return true
+    }
+    return false
+}
+
 type Asset struct {
 	ID        string    `gorm:"primaryKey;type:varchar(36)" json:"id"`
 	Name      string    `gorm:"type:varchar(255);not null" json:"name"`
-	Type      string    `gorm:"type:enum('domain','ip','service');not null" json:"type"`
-	Status    string    `gorm:"type:enum('active','inactive');default:'active'" json:"status"`
+	
+	Type      string    `gorm:"type:varchar(20);not null" json:"type"`
+	Status    string    `gorm:"type:varchar(20);default:'active'" json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

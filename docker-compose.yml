@@ -1,0 +1,38 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: asset-db
+    restart: always
+    environment:
+      MYSQL_DATABASE: asset_db
+      MYSQL_ROOT_PASSWORD: Khuongloc125
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  backend:
+    build: ./my-asset-manager
+    container_name: asset-backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: Khuongloc125
+      DB_NAME: asset_db
+
+  frontend:
+    build: ./frontend
+    container_name: asset-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend

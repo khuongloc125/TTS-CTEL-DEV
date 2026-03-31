@@ -13,7 +13,6 @@ func NewMySQLDB(dsn string) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	// Tự động tạo bảng (Code-First)
 	err = db.AutoMigrate(&models.Asset{})
 	if err != nil {
 		return nil, err
